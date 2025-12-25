@@ -1,0 +1,8 @@
+Flask==3.0.0
+psycopg2-binary==2.9.9
+google-generativeai==0.3.2
+PyYAML==6.0.1
+python-dotenv==1.0.0
+hypothesis==6.92.1
+pytest==7.4.3
+sqlparse==0.4.4

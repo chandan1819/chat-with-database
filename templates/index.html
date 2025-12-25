@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Natural Language SQL Interface</h1>
+
+<div class="query-form">
+    <form id="queryForm">
+        <label for="naturalQuery">Enter your question in plain English:</label>
+        <textarea 
+            id="naturalQuery" 
+            name="naturalQuery" 
+            placeholder="Example: Show me all customers who placed orders in the last month"
+            required
+        ></textarea>
+        <button type="submit" id="submitBtn">
+            <span id="submitText">Convert to SQL</span>
+        </button>
+    </form>
+</div>
+
+<div id="results" class="results-section" style="display: none;">
+    <div class="section-title">Generated SQL Query</div>
+    <div class="sql-display" id="generatedSql"></div>
+    
+    <button id="executeBtn" class="execute-button" style="display: none;">Execute Query</button>
+    
+    <div id="queryResults" style="margin-top: 20px;"></div>
+</div>
+
+<div id="error" class="error" style="display: none;"></div>
+
+<script>
+document.getElementById('queryForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const naturalQuery = document.getElementById('naturalQuery').value.trim();
+    const errorDiv = document.getElementById('error');
+    const resultsDiv = document.getElementById('results');
+    const submitBtn = document.getElementById('submitBtn');
+    const submitText = document.getElementById('submitText');
+    
+    if (!naturalQuery) {
+        showError('Please enter a natural language query.');
+        return;
+    }
+    
+    // Hide previous results/errors
+    hideError();
+    hideResults();
+    
+    // Show loading state
+    showLoading(submitBtn, submitText);
+    
+    fetch('/query', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ natural_query: naturalQuery })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showResults(data);
+        } else {
+            showError(data.error.message, data.generated_sql, data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Request error:', error);
+        showError('Network error: Unable to connect to the server. Please check your connection and try again.');
+    })
+    .finally(() => {
+        hideLoading(submitBtn, submitText);
+    });
+});
+
+document.getElementById('executeBtn').addEventListener('click', function() {
+    // This button is now just for display - execution happens automatically
+    // Could be extended for two-step execution if needed
+});
+
+function showLoading(button, textElement) {
+    button.disabled = true;
+    textElement.innerHTML = '<span class="loading"></span>Processing...';
+    
+    // Add progress bar
+    const form = document.getElementById('queryForm');
+    let progressBar = document.getElementById('progressBar');
+    if (!progressBar) {
+        progressBar = document.createElement('div');
+        progressBar.id = 'progressBar';
+        progressBar.className = 'progress-bar';
+        progressBar.innerHTML = '<div class="progress-fill"></div>';
+        form.appendChild(progressBar);
+    }
+    progressBar.style.display = 'block';
+}
+
+function hideLoading(button, textElement) {
+    button.disabled = false;
+    textElement.textContent = 'Convert to SQL';
+    
+    // Remove progress bar
+    const progressBar = document.getElementById('progressBar');
+    if (progressBar) {
+        progressBar.style.display = 'none';
+    }
+}
+
+function showError(message, generatedSql = null, errorData = null) {
+    const errorDiv = document.getElementById('error');
+    
+    // Use user-friendly message if available
+    let displayMessage = message;
+    if (errorData && errorData.user_message) {
+        displayMessage = errorData.user_message;
+    }
+    
+    // Add error type context if available
+    if (errorData && errorData.type) {
+        const errorTypeMap = {
+            'conversion_error': '🤖 AI Conversion Error',
+            'api_auth_error': '🔑 Authentication Error',
+            'rate_limit_error': '⏱️ Rate Limit Error',
+            'database_connection_error': '🔌 Database Connection Error',
+            'database_query_error': '💾 Database Query Error',
+            'sql_validation_error': '⚠️ SQL Validation Error',
+            'invalid_request': '❌ Invalid Request',
+            'initialization_error': '⚙️ System Error'
+        };
+        
+        const errorIcon = errorTypeMap[errorData.type] || '❌ Error';
+        displayMessage = `${errorIcon}: ${displayMessage}`;
+    }
+    
+    // Add retry button for retryable errors
+    const retryableErrors = ['rate_limit_error', 'database_connection_error', 'conversion_error'];
+    let errorHtml = displayMessage;
+    
+    if (errorData && retryableErrors.includes(errorData.type)) {
+        errorHtml += '<br><button class="retry-button" onclick="retryLastQuery()">Try Again</button>';
+    }
+    
+    errorDiv.innerHTML = errorHtml;
+    errorDiv.style.display = 'block';
+    
+    // If there's generated SQL that failed validation, show it
+    if (generatedSql) {
+        const resultsDiv = document.getElementById('results');
+        const sqlDiv = document.getElementById('generatedSql');
+        const executeBtn = document.getElementById('executeBtn');
+        
+        sqlDiv.textContent = generatedSql;
+        executeBtn.style.display = 'none'; // Don't show execute button for invalid SQL
+        resultsDiv.style.display = 'block';
+    }
+    
+    // Auto-hide certain temporary errors
+    if (errorData && (errorData.type === 'rate_limit_error' || errorData.type === 'database_connection_error')) {
+        setTimeout(() => {
+            if (errorDiv.style.display === 'block') {
+                errorDiv.style.display = 'none';
+            }
+        }, 10000); // Hide after 10 seconds
+    }
+}
+
+function retryLastQuery() {
+    const naturalQuery = document.getElementById('naturalQuery').value.trim();
+    if (naturalQuery) {
+        // Trigger form submission
+        document.getElementById('queryForm').dispatchEvent(new Event('submit'));
+    }
+}
+
+function hideError() {
+    const errorDiv = document.getElementById('error');
+    errorDiv.style.display = 'none';
+}
+
+function showResults(data) {
+    const resultsDiv = document.getElementById('results');
+    const sqlDiv = document.getElementById('generatedSql');
+    const executeBtn = document.getElementById('executeBtn');
+    const queryResultsDiv = document.getElementById('queryResults');
+    
+    // Show success message
+    const successMsg = document.createElement('div');
+    successMsg.className = 'success-message';
+    successMsg.textContent = 'Query executed successfully!';
+    
+    // Show generated SQL
+    sqlDiv.textContent = data.generated_sql;
+    
+    // Hide execute button since query was already executed
+    executeBtn.style.display = 'none';
+    
+    // Show query results with stats
+    let resultsHtml = '';
+    
+    // Add query statistics
+    if (data.results) {
+        const stats = document.createElement('div');
+        stats.className = 'query-stats';
+        
+        const leftStats = document.createElement('div');
+        if (data.results.row_count !== undefined) {
+            leftStats.textContent = `${data.results.row_count} row${data.results.row_count !== 1 ? 's' : ''} returned`;
+        }
+        
+        const rightStats = document.createElement('div');
+        if (data.timestamp) {
+            const timestamp = new Date(data.timestamp).toLocaleTimeString();
+            rightStats.textContent = `Executed at ${timestamp}`;
+        }
+        
+        stats.appendChild(leftStats);
+        stats.appendChild(rightStats);
+        queryResultsDiv.appendChild(stats);
+    }
+    
+    if (data.results && data.results.rows && data.results.rows.length > 0) {
+        resultsHtml = buildResultsTable(data.results);
+    } else {
+        resultsHtml = '<div class="no-results">No results found</div>';
+    }
+    
+    queryResultsDiv.innerHTML += resultsHtml;
+    
+    // Insert success message at the top
+    resultsDiv.insertBefore(successMsg, resultsDiv.firstChild);
+    
+    resultsDiv.style.display = 'block';
+    
+    // Auto-remove success message after 3 seconds
+    setTimeout(() => {
+        if (successMsg.parentNode) {
+            successMsg.remove();
+        }
+    }, 3000);
+}
+
+function hideResults() {
+    const resultsDiv = document.getElementById('results');
+    resultsDiv.style.display = 'none';
+}
+
+function buildResultsTable(results) {
+    const { columns, rows, row_count, displayed_rows, truncated, message } = results;
+    
+    if (!rows || rows.length === 0) {
+        return '<div class="no-results">No results found</div>';
+    }
+    
+    let html = '';
+    
+    // Add metadata
+    if (row_count !== undefined) {
+        html += `<div class="results-metadata">`;
+        if (truncated) {
+            html += `Showing ${displayed_rows} of ${row_count} results`;
+        } else {
+            html += `${row_count} result${row_count !== 1 ? 's' : ''}`;
+        }
+        html += `</div>`;
+    }
+    
+    // Build table
+    html += '<table class="results-table">';
+    
+    // Table header
+    html += '<thead><tr>';
+    columns.forEach(column => {
+        html += `<th>${escapeHtml(column)}</th>`;
+    });
+    html += '</tr></thead>';
+    
+    // Table body
+    html += '<tbody>';
+    rows.forEach(row => {
+        html += '<tr>';
+        columns.forEach(column => {
+            const value = row[column] !== undefined ? row[column] : '';
+            html += `<td>${escapeHtml(String(value))}</td>`;
+        });
+        html += '</tr>';
+    });
+    html += '</tbody>';
+    
+    html += '</table>';
+    
+    // Add truncation notice if applicable
+    if (truncated && message) {
+        html += `<div class="truncation-notice">${escapeHtml(message)}</div>`;
+    }
+    
+    return html;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+{% endblock %}
