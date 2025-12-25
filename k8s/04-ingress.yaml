@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nl2sql-ingress
+  namespace: default
+  labels:
+    app: nl2sql-app
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"  # Optional: for SSL
+spec:
+  ingressClassName: nginx  # Update based on your ingress controller
+  tls:
+  - hosts:
+    - nl2sql.yourdomain.com  # Update with your domain
+    secretName: nl2sql-tls
+  rules:
+  - host: nl2sql.yourdomain.com  # Update with your domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nl2sql-service
+            port:
+              number: 80
