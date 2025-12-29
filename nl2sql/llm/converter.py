@@ -197,7 +197,6 @@ SQL Query:"""
                         "content": prompt
                     }
                 ],
-                "max_tokens": 1000,
                 "temperature": 0.1,  # Low temperature for consistent SQL generation
                 "top_p": 0.9
             }
