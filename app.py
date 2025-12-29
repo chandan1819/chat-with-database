@@ -56,7 +56,7 @@ def create_app():
         logger.info("Database connector initialized successfully")
         
         # Step 3: Initialize query converter with configuration
-        query_converter = Query_Converter(config_manager.gemini_config)
+        query_converter = Query_Converter(config_manager.ai_model_config)
         logger.info("Query converter initialized successfully")
         
         # Step 4: Configure rate limiter with settings from config
@@ -177,7 +177,7 @@ def create_app():
                 'success': False,
                 'error': {
                     'type': 'api_auth_error',
-                    'message': 'API authentication failed. Please check your Gemini API key configuration.',
+                    'message': 'API authentication failed. Please check your AI model client credentials configuration.',
                     'code': 'AUTH_FAILED',
                     'user_message': 'There is a configuration issue with the AI service. Please contact your administrator.'
                 }
@@ -455,7 +455,7 @@ if __name__ == '__main__':
     debug = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
     
     print(f"Starting Natural Language SQL Interface on {host}:{port}")
-    print("Make sure you have a config.yaml file with your database and Gemini API configuration")
+    print("Make sure you have a config.yaml file with your database and AI model configuration")
     
     try:
         app.run(host=host, port=port, debug=debug)

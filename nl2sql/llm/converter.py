@@ -1,12 +1,13 @@
-"""Query conversion using Google Gemini Pro LLM."""
+"""Query conversion using Organization AI Model."""
 
 import logging
 from typing import Dict, Any, Optional
-import google.generativeai as genai
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
-from google.api_core import exceptions as google_exceptions
+import requests
+import json
+from requests.auth import HTTPBasicAuth
+from requests.exceptions import RequestException, Timeout, ConnectionError
 
-from ..config.manager import GeminiConfig
+from ..config.manager import AIModelConfig
 from .rate_limiter import get_default_rate_limiter, RateLimitExceededError
 
 logger = logging.getLogger(__name__)
@@ -18,57 +19,56 @@ class QueryConversionError(Exception):
 
 
 class APIAuthenticationError(Exception):
-    """Raised when Gemini API authentication fails."""
+    """Raised when AI Model API authentication fails."""
     pass
 
 
 class APIRateLimitError(Exception):
-    """Raised when Gemini API rate limit is exceeded."""
+    """Raised when AI Model API rate limit is exceeded."""
     pass
 
 
 class Query_Converter:
-    """Converts natural language queries to SQL using Google Gemini Pro."""
+    """Converts natural language queries to SQL using Organization AI Model."""
     
-    def __init__(self, gemini_config: GeminiConfig, client_id: str = "default"):
+    def __init__(self, ai_model_config: AIModelConfig, client_id: str = "default"):
         """Initialize the query converter.
         
         Args:
-            gemini_config: Gemini API configuration settings
+            ai_model_config: AI Model API configuration settings
             client_id: Identifier for rate limiting (default: "default")
         """
-        self.config = gemini_config
+        self.config = ai_model_config
         self.client_id = client_id
-        self._model = None
         self._rate_limiter = get_default_rate_limiter()
-        self._initialize_gemini()
+        self._session = requests.Session()
+        self._initialize_session()
     
-    def _initialize_gemini(self) -> None:
-        """Initialize Gemini Pro API client.
+    def _initialize_session(self) -> None:
+        """Initialize HTTP session with authentication and headers.
         
         Raises:
-            APIAuthenticationError: If API authentication fails
+            APIAuthenticationError: If API authentication setup fails
         """
         try:
-            # Configure the API key
-            genai.configure(api_key=self.config.api_key)
+            # Set up authentication
+            self._session.auth = HTTPBasicAuth(self.config.client_id, self.config.client_secret)
             
-            # Initialize the model with safety settings
-            self._model = genai.GenerativeModel(
-                model_name='gemini-flash-latest',
-                safety_settings={
-                    HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                    HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                }
-            )
+            # Set up headers
+            self._session.headers.update({
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'User-Agent': 'nl2sql-interface/1.0'
+            })
             
-            logger.info("Gemini Pro API client initialized successfully")
+            # Set timeout for requests
+            self._session.timeout = 30
+            
+            logger.info("Organization AI Model API session initialized successfully")
             
         except Exception as e:
-            logger.error("Failed to initialize Gemini Pro API: %s", str(e))
-            raise APIAuthenticationError(f"Failed to initialize Gemini Pro API: {str(e)}")
+            logger.error("Failed to initialize AI Model API session: %s", str(e))
+            raise APIAuthenticationError(f"Failed to initialize AI Model API session: {str(e)}")
     
     def get_schema_context(self, schema_info: Dict[str, Any]) -> str:
         """Convert schema information into a context string for the LLM.
@@ -173,8 +173,92 @@ SQL Query:"""
         
         return prompt
     
+    def _make_api_request(self, prompt: str) -> str:
+        """Make API request to the organization's AI model.
+        
+        Args:
+            prompt: The prompt to send to the AI model
+            
+        Returns:
+            str: Response from the AI model
+            
+        Raises:
+            APIAuthenticationError: If authentication fails
+            APIRateLimitError: If rate limit is exceeded
+            QueryConversionError: If API request fails
+        """
+        try:
+            # Prepare the request payload
+            payload = {
+                "model": self.config.model_name,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "max_tokens": 1000,
+                "temperature": 0.1,  # Low temperature for consistent SQL generation
+                "top_p": 0.9
+            }
+            
+            # Make the API request
+            response = self._session.post(
+                f"{self.config.base_url.rstrip('/')}/v1/chat/completions",
+                json=payload,
+                timeout=30
+            )
+            
+            # Handle different HTTP status codes
+            if response.status_code == 401:
+                raise APIAuthenticationError("Invalid client credentials")
+            elif response.status_code == 429:
+                raise APIRateLimitError("API rate limit exceeded")
+            elif response.status_code == 403:
+                raise APIAuthenticationError("Access forbidden - check client permissions")
+            elif response.status_code >= 500:
+                raise QueryConversionError(f"AI Model API server error: {response.status_code}")
+            elif response.status_code != 200:
+                raise QueryConversionError(f"AI Model API request failed with status {response.status_code}: {response.text}")
+            
+            # Parse the response
+            try:
+                response_data = response.json()
+            except json.JSONDecodeError as e:
+                raise QueryConversionError(f"Invalid JSON response from AI Model API: {str(e)}")
+            
+            # Extract the generated text
+            if 'choices' not in response_data or not response_data['choices']:
+                raise QueryConversionError("No choices in AI Model API response")
+            
+            choice = response_data['choices'][0]
+            if 'message' not in choice or 'content' not in choice['message']:
+                raise QueryConversionError("Invalid response structure from AI Model API")
+            
+            generated_text = choice['message']['content']
+            if not generated_text or not generated_text.strip():
+                raise QueryConversionError("Empty response from AI Model API")
+            
+            return generated_text.strip()
+            
+        except (ConnectionError, Timeout) as e:
+            logger.error("Network error during AI Model API request: %s", str(e))
+            raise QueryConversionError(f"Network error during AI Model API request: {str(e)}")
+        
+        except RequestException as e:
+            logger.error("HTTP request error during AI Model API request: %s", str(e))
+            raise QueryConversionError(f"HTTP request error during AI Model API request: {str(e)}")
+        
+        except (APIAuthenticationError, APIRateLimitError):
+            # Re-raise these specific exceptions
+            raise
+        
+        except Exception as e:
+            logger.error("Unexpected error during AI Model API request: %s", str(e))
+            raise QueryConversionError(f"Unexpected error during AI Model API request: {str(e)}")
+    
     def convert_to_sql(self, natural_query: str, schema_info: Dict[str, Any]) -> str:
-        """Convert natural language query to SQL using Gemini Pro.
+        """Convert natural language query to SQL using Organization AI Model.
         
         Args:
             natural_query: The natural language query to convert
@@ -191,9 +275,6 @@ SQL Query:"""
         if not natural_query or not natural_query.strip():
             raise QueryConversionError("Natural language query cannot be empty")
         
-        if self._model is None:
-            raise APIAuthenticationError("Gemini Pro API not initialized")
-        
         try:
             # Check rate limit before making API call
             self._rate_limiter.check_rate_limit(self.client_id)
@@ -204,35 +285,13 @@ SQL Query:"""
             # Build the conversion prompt
             prompt = self._build_conversion_prompt(natural_query.strip(), schema_context)
             
-            logger.debug("Sending query to Gemini Pro: %s", natural_query[:100])
+            logger.debug("Sending query to Organization AI Model: %s", natural_query[:100])
             
-            # Generate SQL using Gemini Pro
-            response = self._model.generate_content(prompt)
-            
-            if not response or not response.candidates:
-                raise QueryConversionError("Empty response from Gemini Pro API")
-            
-            # Extract text from the response using the new API format
-            try:
-                sql_query = ""
-                # Try to get text from response parts
-                for candidate in response.candidates:
-                    for part in candidate.content.parts:
-                        if hasattr(part, 'text'):
-                            sql_query += part.text
-                sql_query = sql_query.strip()
-                
-                # If that didn't work, try the simple accessor as fallback
-                if not sql_query and hasattr(response, 'text'):
-                    try:
-                        sql_query = response.text.strip()
-                    except:
-                        pass  # Ignore error and continue with empty sql_query
-                        
-            except Exception as e:
-                raise QueryConversionError(f"Error extracting response text: {str(e)}")
+            # Make API request
+            generated_text = self._make_api_request(prompt)
             
             # Extract and clean the SQL query
+            sql_query = generated_text
             
             # Remove any markdown formatting if present
             if sql_query.startswith('```sql'):
@@ -255,25 +314,17 @@ SQL Query:"""
         except RateLimitExceededError as e:
             logger.error("Rate limit exceeded for client %s: %s", self.client_id, str(e))
             raise APIRateLimitError(f"Rate limit exceeded: {str(e)}")
-            
-        except google_exceptions.Unauthenticated as e:
-            logger.error("Gemini Pro API authentication failed: %s", str(e))
-            raise APIAuthenticationError("Invalid or expired Gemini Pro API key")
         
-        except google_exceptions.ResourceExhausted as e:
-            logger.error("Gemini Pro API rate limit exceeded: %s", str(e))
-            raise APIRateLimitError("Gemini Pro API rate limit exceeded. Please try again later.")
-        
-        except google_exceptions.GoogleAPIError as e:
-            logger.error("Gemini Pro API error: %s", str(e))
-            raise QueryConversionError(f"Gemini Pro API error: {str(e)}")
+        except (APIAuthenticationError, APIRateLimitError):
+            # Re-raise these specific exceptions
+            raise
         
         except Exception as e:
             logger.error("Unexpected error during query conversion: %s", str(e))
             raise QueryConversionError(f"Unexpected error during query conversion: {str(e)}")
     
     def test_api_connection(self) -> bool:
-        """Test the Gemini Pro API connection.
+        """Test the Organization AI Model API connection.
         
         Returns:
             bool: True if API connection is successful
@@ -308,7 +359,7 @@ SQL Query:"""
             if not result or not isinstance(result, str):
                 raise QueryConversionError("API test returned invalid result")
             
-            logger.info("Gemini Pro API connection test successful")
+            logger.info("Organization AI Model API connection test successful")
             return True
             
         except RateLimitExceededError as e:

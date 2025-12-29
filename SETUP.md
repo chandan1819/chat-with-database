@@ -4,8 +4,8 @@
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/yourusername/nl2sql-gemini.git
-cd nl2sql-gemini
+git clone https://github.com/yourusername/nl2sql-interface.git
+cd nl2sql-interface
 ```
 
 ### 2. Install Dependencies
@@ -20,7 +20,7 @@ cp config.yaml.example config.yaml
 
 Edit `config.yaml` with your settings:
 - Add your PostgreSQL database credentials
-- Add your Gemini API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
+- Add your organization's AI model credentials (client ID, client secret, base URL, model name)
 
 ### 4. Set Up Test Database (Optional)
 ```bash
@@ -33,12 +33,12 @@ chmod +x setup_database.sh
 python app.py
 ```
 
-Visit `http://localhost:3001` and start querying your database in natural language!
+Visit `http://localhost:3000` and start querying your database in natural language!
 
 ## 🔑 Required Credentials
 
 - **PostgreSQL Database**: Connection details (host, username, password, database)
-- **Gemini API Key**: Get from [Google AI Studio](https://makersuite.google.com/app/apikey)
+- **Organization AI Model**: Client ID, Client Secret, Base URL, and Model Name from your organization's AI platform
 
 ## 🎯 Example Queries
 

@@ -29,9 +29,12 @@ class DatabaseConfig:
 
 
 @dataclass
-class GeminiConfig:
-    """Gemini API configuration settings."""
-    api_key: str
+class AIModelConfig:
+    """Organization AI Model configuration settings."""
+    client_id: str
+    client_secret: str
+    base_url: str
+    model_name: str
 
 
 @dataclass
@@ -68,7 +71,7 @@ class Config_Manager:
         self.config_path = config_path
         self._config_data: Optional[Dict[str, Any]] = None
         self._database_config: Optional[DatabaseConfig] = None
-        self._gemini_config: Optional[GeminiConfig] = None
+        self._ai_model_config: Optional[AIModelConfig] = None
         self._rate_limit_config: Optional[RateLimitConfig] = None
         self._app_config: Optional[AppConfig] = None
     
@@ -94,7 +97,7 @@ class Config_Manager:
         
         # Validate and load each configuration section
         self._load_database_config()
-        self._load_gemini_config()
+        self._load_ai_model_config()
         self._load_rate_limit_config()
         self._load_app_config()
         
@@ -139,18 +142,34 @@ class Config_Manager:
             schema=str(db_config['schema']).strip()
         )
     
-    def _load_gemini_config(self) -> None:
-        """Load and validate Gemini API configuration."""
-        gemini_config = self._config_data.get('gemini')
-        if not gemini_config:
-            raise ConfigurationError("Missing 'gemini' section in configuration")
+    def _load_ai_model_config(self) -> None:
+        """Load and validate AI model configuration."""
+        ai_model_config = self._config_data.get('ai_model')
+        if not ai_model_config:
+            raise ConfigurationError("Missing 'ai_model' section in configuration")
         
-        api_key = gemini_config.get('api_key')
-        if not api_key or not str(api_key).strip():
-            raise ConfigurationError("Gemini API key cannot be empty")
+        required_fields = ['client_id', 'client_secret', 'base_url', 'model_name']
+        missing_fields = [field for field in required_fields if field not in ai_model_config]
         
-        self._gemini_config = GeminiConfig(
-            api_key=str(api_key).strip()
+        if missing_fields:
+            raise ConfigurationError(
+                f"Missing required AI model configuration fields: {', '.join(missing_fields)}"
+            )
+        
+        # Validate required string fields are not empty
+        empty_fields = [field for field in required_fields 
+                       if not ai_model_config.get(field) or not str(ai_model_config[field]).strip()]
+        
+        if empty_fields:
+            raise ConfigurationError(
+                f"AI model configuration fields cannot be empty: {', '.join(empty_fields)}"
+            )
+        
+        self._ai_model_config = AIModelConfig(
+            client_id=str(ai_model_config['client_id']).strip(),
+            client_secret=str(ai_model_config['client_secret']).strip(),
+            base_url=str(ai_model_config['base_url']).strip(),
+            model_name=str(ai_model_config['model_name']).strip()
         )
     
     def _load_rate_limit_config(self) -> None:
@@ -246,18 +265,18 @@ class Config_Manager:
         return self._database_config
     
     @property
-    def gemini_config(self) -> GeminiConfig:
-        """Get Gemini API configuration.
+    def ai_model_config(self) -> AIModelConfig:
+        """Get AI model configuration.
         
         Returns:
-            GeminiConfig: Gemini configuration object
+            AIModelConfig: AI model configuration object
             
         Raises:
             ConfigurationError: If configuration hasn't been loaded
         """
-        if self._gemini_config is None:
+        if self._ai_model_config is None:
             raise ConfigurationError("Configuration not loaded. Call load_config() first.")
-        return self._gemini_config
+        return self._ai_model_config
     
     @property
     def rate_limit_config(self) -> RateLimitConfig:

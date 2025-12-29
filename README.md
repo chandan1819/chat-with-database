@@ -1,10 +1,10 @@
 # Natural Language SQL Interface
 
-A Python web application that converts natural language queries to SQL using Google's Gemini Pro LLM and executes them against PostgreSQL databases.
+A Python web application that converts natural language queries to SQL using your organization's AI model and executes them against PostgreSQL databases.
 
 ## Features
 
-- **Natural Language Processing**: Convert English questions to SQL queries using Google Gemini Pro
+- **Natural Language Processing**: Convert English questions to SQL queries using your organization's AI model
 - **PostgreSQL Integration**: Secure database connectivity with connection pooling
 - **SQL Validation**: Built-in safety checks to prevent dangerous operations and SQL injection
 - **Web Interface**: Clean, responsive web UI for query input and result display
@@ -44,7 +44,7 @@ nl2sql/
 
 - Python 3.8 or higher
 - PostgreSQL database (local or remote)
-- Google Gemini Pro API key
+- Access to your organization's AI model API
 
 ## Setup Instructions
 
@@ -76,8 +76,11 @@ database:
   database: your_database_name    # Database name
   schema: public                  # Schema to query (usually 'public')
 
-gemini:
-  api_key: your_gemini_api_key_here  # Get from Google AI Studio
+ai_model:
+  client_id: your_client_id_here          # Your organization's client ID
+  client_secret: your_client_secret_here  # Your organization's client secret
+  base_url: your_base_url_here           # Your organization's API base URL
+  model_name: llama-3-3-70b-instruct     # Your organization's model name
 
 # Optional: Rate limiting configuration
 rate_limit:
@@ -92,11 +95,13 @@ app:
   secret_key: your-secret-key-here  # Flask secret key
 ```
 
-### 4. Get a Gemini Pro API Key
+### 4. Get Your Organization's AI Model Credentials
 
-1. Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
-2. Create a new API key
-3. Copy the key to your `config.yaml` file
+Contact your organization's IT department or AI platform administrator to obtain:
+- Client ID
+- Client Secret
+- Base URL for the API
+- Model name (e.g., llama-3-3-70b-instruct)
 
 ### 5. Set Up Your Database
 
@@ -145,9 +150,12 @@ The application will start on `http://localhost:5000` (or the host/port specifie
 - **database**: Database name to connect to
 - **schema**: Schema to query (default: public)
 
-### Gemini API Configuration
+### AI Model Configuration
 
-- **api_key**: Your Google Gemini Pro API key
+- **client_id**: Your organization's client ID for API authentication
+- **client_secret**: Your organization's client secret for API authentication
+- **base_url**: Base URL for your organization's AI model API
+- **model_name**: Name of the AI model to use (e.g., llama-3-3-70b-instruct)
 
 ### Rate Limiting Configuration
 
@@ -169,6 +177,7 @@ The application will start on `http://localhost:5000` (or the host/port specifie
 - **Credential Protection**: Database credentials are never exposed in error messages
 - **Rate Limiting**: Prevents API abuse with configurable limits
 - **Input Validation**: All user inputs are validated and sanitized
+- **Secure Authentication**: Uses client credentials for AI model API authentication
 
 ## Monitoring and Health Checks
 
@@ -219,10 +228,10 @@ Visit `/rate-limit-status` to check current API usage:
    - Ensure PostgreSQL is running and accessible
    - Verify the database and schema exist
 
-2. **Gemini API Authentication Failed**
-   - Verify your API key is correct in `config.yaml`
-   - Check that your API key has proper permissions
-   - Ensure you haven't exceeded API quotas
+2. **AI Model API Authentication Failed**
+   - Verify your client ID and client secret are correct in `config.yaml`
+   - Check that your credentials have proper permissions
+   - Ensure the base URL is correct and accessible from your network
 
 3. **Rate Limit Exceeded**
    - Wait for the rate limit window to reset
@@ -242,7 +251,7 @@ The application logs important events and errors. Check the console output for d
 
 - **Flask 3.0.0**: Web framework for the user interface
 - **psycopg2-binary 2.9.9**: PostgreSQL database adapter
-- **google-generativeai 0.3.2**: Google Gemini Pro API client
+- **requests 2.31.0**: HTTP client for AI model API communication
 - **PyYAML 6.0.1**: YAML configuration file parsing
 - **python-dotenv 1.0.0**: Environment variable management
 - **sqlparse 0.4.4**: SQL parsing and validation
