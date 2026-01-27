@@ -167,20 +167,21 @@ class Config_Manager:
                 f"AI model configuration fields cannot be empty: {', '.join(empty_fields)}"
             )
         
-        # Handle SSL configuration
+        # Handle SSL configuration (optional)
         ssl_config = ai_model_config.get('ssl', {})
-        ssl_verify = ssl_config.get('verify', True)
-        ca_bundle = ssl_config.get('ca_bundle')
+        ssl_verify = ssl_config.get('verify', True) if ssl_config else True
+        ca_bundle = ssl_config.get('ca_bundle') if ssl_config else None
         
         # Validate SSL settings
-        if not isinstance(ssl_verify, bool):
+        if ssl_config and 'verify' in ssl_config and not isinstance(ssl_verify, bool):
             raise ConfigurationError("AI model SSL verify setting must be a boolean (true/false)")
         
         # If ca_bundle is specified, check if file exists
         if ca_bundle:
             ca_bundle = str(ca_bundle).strip()
             if not os.path.exists(ca_bundle):
-                raise ConfigurationError(f"SSL CA bundle file not found: {ca_bundle}")
+                logger.warning("SSL CA bundle file not found: %s - using default SSL verification", ca_bundle)
+                ca_bundle = None
         
         self._ai_model_config = AIModelConfig(
             client_id=str(ai_model_config['client_id']).strip(),

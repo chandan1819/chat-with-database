@@ -447,12 +447,32 @@ def create_app():
     return app
 
 if __name__ == '__main__':
-    app = create_app()
+    # Load configuration to get app settings
+    try:
+        from nl2sql.config.manager import Config_Manager
+        config_manager = Config_Manager()
+        config_manager.load_config()
+        app_config = config_manager.app_config
+        
+        host = app_config.host
+        port = app_config.port
+        debug = app_config.debug
+        
+        print(f"Using configuration from config.yaml:")
+        print(f"  Host: {host}")
+        print(f"  Port: {port}")
+        print(f"  Debug: {debug}")
+        
+    except Exception as e:
+        print(f"Warning: Could not load app configuration from config.yaml: {e}")
+        print("Falling back to environment variables and defaults")
+        
+        # Fallback to environment variables or defaults
+        host = os.environ.get('FLASK_HOST', '0.0.0.0')
+        port = int(os.environ.get('FLASK_PORT', 5000))
+        debug = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
     
-    # Get configuration from environment or use defaults
-    host = os.environ.get('FLASK_HOST', '0.0.0.0')
-    port = int(os.environ.get('FLASK_PORT', 5000))
-    debug = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    app = create_app()
     
     print(f"Starting Natural Language SQL Interface on {host}:{port}")
     print("Make sure you have a config.yaml file with your database and AI model configuration")
