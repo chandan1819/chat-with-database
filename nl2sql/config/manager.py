@@ -35,6 +35,8 @@ class AIModelConfig:
     client_secret: str
     base_url: str
     model_name: str
+    ssl_verify: bool = True
+    ca_bundle: Optional[str] = None
 
 
 @dataclass
@@ -165,11 +167,28 @@ class Config_Manager:
                 f"AI model configuration fields cannot be empty: {', '.join(empty_fields)}"
             )
         
+        # Handle SSL configuration
+        ssl_config = ai_model_config.get('ssl', {})
+        ssl_verify = ssl_config.get('verify', True)
+        ca_bundle = ssl_config.get('ca_bundle')
+        
+        # Validate SSL settings
+        if not isinstance(ssl_verify, bool):
+            raise ConfigurationError("AI model SSL verify setting must be a boolean (true/false)")
+        
+        # If ca_bundle is specified, check if file exists
+        if ca_bundle:
+            ca_bundle = str(ca_bundle).strip()
+            if not os.path.exists(ca_bundle):
+                raise ConfigurationError(f"SSL CA bundle file not found: {ca_bundle}")
+        
         self._ai_model_config = AIModelConfig(
             client_id=str(ai_model_config['client_id']).strip(),
             client_secret=str(ai_model_config['client_secret']).strip(),
             base_url=str(ai_model_config['base_url']).strip(),
-            model_name=str(ai_model_config['model_name']).strip()
+            model_name=str(ai_model_config['model_name']).strip(),
+            ssl_verify=ssl_verify,
+            ca_bundle=ca_bundle
         )
     
     def _load_rate_limit_config(self) -> None:

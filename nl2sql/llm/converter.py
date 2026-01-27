@@ -64,6 +64,20 @@ class Query_Converter:
             # Set timeout for requests
             self._session.timeout = 30
             
+            # Configure SSL verification
+            if hasattr(self.config, 'ssl_verify') and not self.config.ssl_verify:
+                # Disable SSL verification (not recommended for production)
+                self._session.verify = False
+                logger.warning("SSL verification is disabled - this is not recommended for production")
+            elif hasattr(self.config, 'ca_bundle') and self.config.ca_bundle:
+                # Use custom CA bundle
+                self._session.verify = self.config.ca_bundle
+                logger.info("Using custom CA bundle for SSL verification: %s", self.config.ca_bundle)
+            else:
+                # Use default SSL verification
+                self._session.verify = True
+                logger.info("Using default SSL verification")
+            
             logger.info("Organization AI Model API session initialized successfully")
             
         except Exception as e:

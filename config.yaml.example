@@ -16,6 +16,12 @@ ai_model:
   client_secret: your_client_secret_here  # Replace with your actual client secret
   base_url: your_base_url_here           # Replace with your actual base URL
   model_name: llama-3-3-70b-instruct     # Your organization's model name
+  
+  # SSL Configuration for corporate networks
+  ssl:
+    verify: true                          # Set to false to disable SSL verification (not recommended)
+    ca_bundle: ca.cert.pem               # Path to your CA certificate file
+    # ca_bundle: /path/to/ca-bundle.crt  # Alternative: full path to CA bundle
 
 # Rate Limiting Configuration
 rate_limit:
